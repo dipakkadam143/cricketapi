@@ -1,0 +1,94 @@
+package cricket.example;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class CricketMatches {
+    private static final String API_URL = "https://api.cuvora.com/car/partner/cricket-data";
+    private static final String API_KEY = "test-creds@2320";
+
+    public static void main(String[] args) {
+        try {
+            String jsonResponse = getApiData(API_URL, API_KEY);
+            processMatchesData(jsonResponse);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static String getApiData(String apiUrl, String apiKey) throws Exception {
+        URL url = new URL(apiUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+        connection.setRequestProperty("apiKey", apiKey);
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+        String inputLine;
+        StringBuilder content = new StringBuilder();
+        while ((inputLine = in.readLine()) != null) {
+            content.append(inputLine);
+        }
+        in.close();
+        connection.disconnect();
+        return content.toString();
+    }
+
+    private static void processMatchesData(String jsonResponse) {
+        int highestScore = 0;
+        String highestScoringTeam = "";
+        int matchesWith300PlusScore = 0;
+
+        // Remove the outer array brackets
+        jsonResponse = jsonResponse.substring(1, jsonResponse.length() - 1);
+        String[] matches = jsonResponse.split("\\},\\{");
+
+        for (String match : matches) {
+            match = match.replace("[", "").replace("]", "").replace("{", "").replace("}", "");
+            String[] fields = match.split("\",\"");
+            
+            String matchStatus = getField(fields, "ms");
+            if (matchStatus.equals("result")) {
+                int team1Score = parseScore(getField(fields, "t1s"));
+                int team2Score = parseScore(getField(fields, "t2s"));
+                int totalScore = team1Score + team2Score;
+
+                if (team1Score > highestScore) {
+                    highestScore = team1Score;
+                    highestScoringTeam = getField(fields, "t1");
+                }
+
+                if (team2Score > highestScore) {
+                    highestScore = team2Score;
+                    highestScoringTeam = getField(fields, "t2");
+                }
+
+                if (totalScore >= 300) {
+                    matchesWith300PlusScore++;
+                }
+            }
+        }
+
+        System.out.println("Highest Score: " + highestScore + " and Team Name is: " + highestScoringTeam);
+        System.out.println("Number Of Matches with total 300 Plus Score: " + matchesWith300PlusScore);
+    }
+
+    private static String getField(String[] fields, String key) {
+        for (String field : fields) {
+            String[] keyValue = field.split("\":\"");
+            if (keyValue.length == 2 && keyValue[0].replace("\"", "").equals(key)) {
+                return keyValue[1].replace("\"", "");
+            }
+        }
+        return "";
+    }
+
+    private static int parseScore(String score) {
+        if (score == null || score.isEmpty()) {
+            return 0;
+        }
+        String[] parts = score.split("/");
+        return Integer.parseInt(parts[0].trim());
+    }
+}
